@@ -10,6 +10,11 @@
 
 #include <st_handeye/st_handeye.hpp>
 
+// cctag
+#include "cctag/ICCTag.hpp"
+#include "cctag/CCTag.hpp"
+
+using namespace cctag;
 
 /**
  * @brief The Dataset struct
@@ -48,14 +53,19 @@ public:
 
             std::vector<double> row;
             std::stringstream sst(line);
+            int i = 0;
             while(!sst.eof()) {
                 double value;
                 sst >> value;
-                row.push_back(value);
+                if(i<4){
+                    row.push_back(value);
+                    i++;
+                }
             }
 
             matrix.push_back(row);
         }
+
 
         Eigen::MatrixXd m(matrix.size(), matrix[0].size());
         for(int i=0; i<matrix.size(); i++) {
@@ -63,22 +73,20 @@ public:
                 m(i, j) = matrix[i][j];
             }
         }
-
         return m;
     }
 
     // reads data from a directory
     static std::shared_ptr<Dataset> read(const std::string& dataset_dir, const std::string& ros_camera_params_file, bool visualize) {
-        int PATTERN_ROWS = 4;
-        int PATTERN_COLS = 11;
-        double L = 0.04;
+        int PATTERN_ROWS = 3;
+        int PATTERN_COLS = 4;
+        double L = 0.065;
         std::shared_ptr<Dataset> dataset(new Dataset());
         dataset->pattern_3d.resize(3, PATTERN_ROWS * PATTERN_COLS);
         for(int j=0; j<PATTERN_COLS; j++) {
             for(int i=0; i<PATTERN_ROWS; i++) {
-                double y_offset = j % 2 == 0 ? 0 : L / 2;
                 int idx = j * PATTERN_ROWS + i;
-                dataset->pattern_3d.col(idx) = Eigen::Vector3d(-0.09+j * L / 2, -0.07+i * L + y_offset, 0);
+                dataset->pattern_3d.col(idx) = Eigen::Vector3d(-j*L ,i*L , 0);
             }
         }
 
@@ -89,8 +97,6 @@ public:
         //         double X = j * L / 2;
         //         double Y = i * L + y_offset;
         //         //dataset->pattern_3d.col(idx) = Eigen::Vector3d(j * L / 2, i * L + y_offset, 0);
-        //         //dataset->pattern_3d.col(idx) = Eigen::Vector3d(0, 0.09-j * L / 2, 0.93+i * L + y_offset);
-        //         // dataset->pattern_3d.col(idx) = Eigen::Vector3d(0, Y, X);
         //     }
         // }
 
@@ -123,7 +129,7 @@ public:
             std::string data_id = filename.substr(suffix_loc - 3, 3);
 
             cv::Mat image = cv::imread(dataset_dir + "/" + data_id + "_image.jpg");
-            //cv::cvtColor(image, image, cv::COLOR_RGB2GRAY);
+            cv::cvtColor(image, image, CV_BGR2GRAY);
             Eigen::Matrix4d handpose = read_matrix(dataset_dir + "/" + data_id + "_pose.csv");
 
             if(ros_camera_params_file.empty()) {
@@ -137,26 +143,48 @@ public:
             cv::Mat undistorted;
             cv::undistort(image, undistorted, cv_camera_matrix, cv_distortion);
 
-            cv::Mat cv_grid_2d;
-            bool ret = cv::findCirclesGrid(undistorted, cv::Size(PATTERN_ROWS, PATTERN_COLS), cv_grid_2d, cv::CALIB_CB_ASYMMETRIC_GRID);
-            cv::drawChessboardCorners(undistorted, cv::Size(PATTERN_ROWS, PATTERN_COLS), cv_grid_2d, ret);
-            imwrite(data_id+".jpg", undistorted);
-            if(!ret) {
-                std::cerr << "failed to find circles!!" << std::endl;
-                std::cerr << filename << std::endl;
-                continue;
-            }
-
+            //detect cctag
+            size_t frameId = 0;
+            int pipeId = 0;
+            boost::ptr_list<cctag::ICCTag> markers{};
+            const size_t nCrowns = 3;
+            Parameters params(nCrowns);
+            params.setUseCuda(false);
+            cctagDetection(markers, pipeId, frameId, undistorted, params);
+            int i = 0;
             Eigen::MatrixXd grid_2d(2, PATTERN_ROWS * PATTERN_COLS);
-            for(int i=0; i<44; i++) {
-                grid_2d(0, i) = cv_grid_2d.at<cv::Vec2f>(i)[0];
-                grid_2d(1, i) = cv_grid_2d.at<cv::Vec2f>(i)[1];
+            for(const cctag::ICCTag& marker : markers)
+            {
+                //std::cout<<i<<std::endl;
+                if(marker.getStatus() == status::id_reliable){
+                    grid_2d(0, i) = marker.x();
+                    grid_2d(1, i) = marker.y();                 
+                    i++;
+                }
             }
 
-            // for(int i=0; i<44; i++) {
+
+            // cv::Mat cv_grid_2d;
+            // bool ret = cv::findCirclesGrid(undistorted, cv::Size(PATTERN_ROWS, PATTERN_COLS), cv_grid_2d, cv::CALIB_CB_ASYMMETRIC_GRID);
+            // cv::drawChessboardCorners(undistorted, cv::Size(PATTERN_ROWS, PATTERN_COLS), cv_grid_2d, ret);
+            //imwrite(data_id+".jpg", undistorted);
+            // if(!ret) {
+            //     std::cerr << "failed to find circles!!" << std::endl;
+            //     std::cerr << filename << std::endl;
+            //     continue;
+            // }
+
+            // Eigen::MatrixXd grid_2d(2, PATTERN_ROWS * PATTERN_COLS);
+            // for(int i=0; i<12; i++) {
+            //     grid_2d(0, i) = cv_grid_2d.at<cv::Vec2f>(i)[0];
+            //     grid_2d(1, i) = cv_grid_2d.at<cv::Vec2f>(i)[1];
+            // }
+
+            // for(int i=0; i<12; i++) {
             //     std::cout<< grid_2d(0, i) << " "<<grid_2d(1, i)<<std::endl;
             // }
-            std::cout<<std::endl;
+
+            //std::cout<<std::endl;
             dataset->images.push_back(undistorted);
             dataset->handposes.push_back(handpose);
             dataset->pattern_2ds.push_back(grid_2d);
@@ -308,12 +336,14 @@ int main(int argc, char** argv) {
     Eigen::Isometry3d hand2eye_graph = Eigen::Isometry3d::Identity();
     Eigen::Isometry3d object2world_graph = Eigen::Isometry3d::Identity();
 
+
     Eigen::Isometry3d init_guess = Eigen::Isometry3d::Identity();
     init_guess(0,3)=0.05;
     init_guess(2,3)=0.2;
     std::cout<<"init"<<std::endl;
     std::cout<<init_guess.matrix()<<std::endl;
     if(vm.count("use_init_guess")) {
+        std::cout<<"USE"<<std::endl;
         //hand2eye_graph = hand2eye_visp;
         hand2eye_graph = init_guess;
         object2world_graph = object2world_visp;

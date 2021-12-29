@@ -80,6 +80,12 @@ std::vector<Eigen::Isometry3d> calc_object2eyes(
         object2eye.linear() = cvmat2eigen(rotation);
 
         object2eyes[i] = object2eye;
+
+        std::cout<<rotation;
+        std::cout<<std::endl;
+        std::cout<<tvec;
+        std::cout<<std::endl;
+
     }
 
     return object2eyes;

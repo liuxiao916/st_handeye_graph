@@ -3,11 +3,10 @@
 mkdir data
 
 camera_params="../../st_handeye_eval/camera_info.yaml"
-calib_test_dir="../../st_handeye_eval/calib_test"
+calib_test_dir="../../st_handeye_eval/cctag_test"
 
-reconst_dir="../../st_handeye_eval/spirit_reconst"
 
-command="../build/calibrate -u"
+command="../build/calibrate_cctag -u"
 command="$command -c $camera_params"
 command="$command --visual_inf_scale 1e-6"
 command="$command --handpose_inf_scale_trans 1e-3"
