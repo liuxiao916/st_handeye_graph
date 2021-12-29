@@ -71,7 +71,7 @@ public:
     static std::shared_ptr<Dataset> read(const std::string& dataset_dir, const std::string& ros_camera_params_file, bool visualize) {
         int PATTERN_ROWS = 4;
         int PATTERN_COLS = 11;
-        double L = 0.04;
+        double L = 0.08;
         std::shared_ptr<Dataset> dataset(new Dataset());
         dataset->pattern_3d.resize(3, PATTERN_ROWS * PATTERN_COLS);
         for(int j=0; j<PATTERN_COLS; j++) {
@@ -309,13 +309,19 @@ int main(int argc, char** argv) {
     Eigen::Isometry3d object2world_graph = Eigen::Isometry3d::Identity();
 
     Eigen::Isometry3d init_guess = Eigen::Isometry3d::Identity();
+    init_guess(0,0)=0;
+    init_guess(1,0)=-1;
+    init_guess(1,1)=0;
+    init_guess(2,2)=0;
+    init_guess(2,1)=-1;
+    init_guess(0,2)=1;
     init_guess(0,3)=0.05;
     init_guess(2,3)=0.2;
     std::cout<<"init"<<std::endl;
     std::cout<<init_guess.matrix()<<std::endl;
     if(vm.count("use_init_guess")) {
-        //hand2eye_graph = hand2eye_visp;
-        hand2eye_graph = init_guess;
+        hand2eye_graph = hand2eye_visp;
+        //hand2eye_graph = init_guess;
         object2world_graph = object2world_visp;
     }
 

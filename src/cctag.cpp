@@ -38,7 +38,7 @@ void drawMarkers(const boost::ptr_list<ICCTag>& markers, cv::Mat& image, ofstrea
         const int fontSize = 3;
         if(marker.getStatus() == status::id_reliable)
         {   
-
+            std::cout<<center<<std::endl;
             const cv::Scalar color = cv::Scalar(0, 255, 0, 255);
             const auto rescaledOuterEllipse = marker.rescaledOuterEllipse();
 
@@ -80,7 +80,7 @@ void test_detect_one_image()
     string src_path = "/home/liuxiao/Downloads/";
     string src_name = "temp.svg";
 
-    cv::Mat src = cv::imread("/home/liuxiao/test/st_handeye_eval/cctag_test/005_image.jpg");
+    cv::Mat src = cv::imread("/home/liuxiao/catkin_ws/src/HLRobot_gazebo/hlrobot_gazebo/models/calibration_plane1/materials/textures/1.png");
     std::cout<<"here";
     cv::Mat graySrc;
     cv::cvtColor(src, graySrc, CV_BGR2GRAY);
